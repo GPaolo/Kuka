@@ -24,15 +24,19 @@ class KukaPush(kukaGymEnv.KukaGymEnv):
   This environment defines a Kuka arm that has to push a small cube on a table
   """
   # ---------------------------------
-  def __init__(self):
+  def __init__(self, joint_control=True):
     """
     Constructor
     """
+    self.joint_control = joint_control
     self.init_box_pose = [0.7, 0]
     super(KukaPush, self).__init__(renders=False)
 
-    # Redefine actions space cause parent env does not use the z control
-    action_dim = 4 # [dx, dy, dz, da, action_len]
+    if self._kuka.joint_control:
+      action_dim = 7 # The 7 joints positions
+    else:
+      action_dim = 4 # [dx, dy, dz, da, action_len]
+
     self._action_bound = 1
     action_high = np.array([self._action_bound] * action_dim)
     self.action_space = spaces.Box(-action_high, action_high)
@@ -42,6 +46,7 @@ class KukaPush(kukaGymEnv.KukaGymEnv):
     observation_high = np.array([largeValObservation] * observationDim)
     self.observation_space = spaces.Box(-observation_high, observation_high)
   # ---------------------------------
+
   # ---------------------------------
   def set_init_box_pose(self, init_box_pose):
     """
@@ -74,7 +79,7 @@ class KukaPush(kukaGymEnv.KukaGymEnv):
                                orn[0], orn[1], orn[2], orn[3])
 
     p.setGravity(0, 0, -10)
-    self._kuka = kuka.KukaNoTray(urdfRootPath=self._urdfRoot, timeStep=self._timeStep)
+    self._kuka = kuka.KukaNoTray(urdfRootPath=self._urdfRoot, timeStep=self._timeStep, joint_ctrl=self.joint_control)
     self._envStepCounter = 0
     p.stepSimulation()
     self._observation = self.get_observation()
@@ -89,21 +94,21 @@ class KukaPush(kukaGymEnv.KukaGymEnv):
     :param action: Action commands to be applied. In the form of [pos, action_len]
     :return: observation, 0, done, {}
     """
-    pos = action[0]
-    end = action[1]
+    pos = action
+    # end = action[1]
 
     self._actionRepeat = 1
     for i in range(self._actionRepeat):
       self._kuka.applyAction(pos)
       p.stepSimulation()
       self._envStepCounter += 1
-      if self._termination(end):
+      if self._termination(1):
         break
     if self._renders:
       time.sleep(self._timeStep)
     self._observation = self.get_observation()
 
-    done = self._termination(end)
+    done = self._termination(1)
     if done:
       self.reset_arm_pose()
 
@@ -134,7 +139,7 @@ class KukaPush(kukaGymEnv.KukaGymEnv):
     :return: True if termination conditions are met, false otherwise
     """
     self._observation = self.get_observation()
-    if self._observation[3] > 1.2 or self._observation[3] < 0.:  # x position of bloc
+    if self._observation[3] > 1.1 or self._observation[3] < 0.1:  # x position of bloc
       # print('Terminating cause of X')
       return True
     if np.abs(self._observation[4]) > 0.45:  # y position of bloc
